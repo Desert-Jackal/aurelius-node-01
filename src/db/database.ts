@@ -16,7 +16,7 @@ if (!fs.existsSync(dbDir)) {
 export const db = new Database(dbPath);
 
 // Enable Write-Ahead Logging (WAL) for high-concurrency read performance
-db.pragma("journal_mode = WAL");
+// db.pragma("journal_mode = WAL");
 
 /**
  * Initializes the SQLite schema tables and indexes.
