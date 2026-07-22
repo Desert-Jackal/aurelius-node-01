@@ -210,6 +210,35 @@ app.get("/api/v1/supply", async (req: Request, res: Response) => {
   }
 });
 
+// 🔓 Internal Node Inspector (Stealth Mode)
+app.get("/api/v1/admin/preview", (req: Request, res: Response) => {
+  const providedKey = req.query.key || req.headers["x-admin-key"];
+  const secretKey = process.env.ADMIN_SECRET_KEY;
+
+  // 1. If key doesn't match, mask the route entirely (return standard Express 404)
+  if (!secretKey || providedKey !== secretKey) {
+    return res.status(404).json({ error: "Cannot GET /api/v1/admin/preview" });
+  }
+
+  // 2. Fetch full ground-truth dataset only when authenticated
+  const inventory = db.prepare("SELECT * FROM industrial_inventory ORDER BY id ASC").all();
+  const fuel = db.prepare("SELECT * FROM fuel_prices ORDER BY id ASC").all();
+  const freight = db.prepare("SELECT * FROM hotshot_freight_lanes ORDER BY id ASC").all();
+  const ledger = db.prepare("SELECT * FROM payment_ledger ORDER BY id DESC LIMIT 10").all();
+
+  return res.json({
+    status: "ONLINE",
+    node: "Aurelius Node 01",
+    timestamp: new Date().toISOString(),
+    data: {
+      industrial_inventory: inventory,
+      fuel_rack_prices: fuel,
+      hotshot_freight_lanes: freight,
+      recent_payments: ledger
+    }
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`\n==================================================`);
   console.log(`🚀 [AURELIUS NODE 01] FULL DECK ONLINE AT PORT ${PORT}`);

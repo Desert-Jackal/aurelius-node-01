@@ -20,7 +20,7 @@ async function fetchEiaDieselPrice(): Promise<OracleItem | null> {
     // EIA v2 API route for U.S. Gulf Coast Diesel Spot Price
     const url = `https://api.eia.gov/v2/petroleum/pri/spt/data/?api_key=${apiKey}&frequency=daily&data[0]=value&facets[series][]=EER_EPD2D_PF4_RGC_DPG&sort[0][column]=period&sort[0][direction]=desc&length=1`;
     
-    const response = await axios.get(url, { timeout: 5000 });
+    const response = await axios.get(url, { timeout: 15000 });
     const data = response.data?.response?.data?.[0];
 
     if (data && data.value) {
@@ -49,7 +49,7 @@ async function fetchFredSteelIndex(): Promise<OracleItem | null> {
     // FRED Series: WPU1017 (Steel Mill Products PPI)
     const url = `https://api.stlouisfed.org/fred/series/observations?series_id=WPU1017&api_key=${apiKey}&file_type=json&sort_order=desc&limit=1`;
     
-    const response = await axios.get(url, { timeout: 5000 });
+    const response = await axios.get(url, { timeout: 15000 });
     const obs = response.data?.observations?.[0];
 
     if (obs && obs.value) {
