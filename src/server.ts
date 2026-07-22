@@ -160,6 +160,17 @@ app.get("/api/v1/supply", async (req: Request, res: Response) => {
   }
 });
 
+// 🏠 Root Redirect / Welcome
+app.get("/", (req: Request, res: Response) => {
+  res.json({
+    message: "Welcome to Aurelius Node 01",
+    status: "ONLINE",
+    manifest: "/.well-known/agent.json",
+    health: "/health",
+    supply_endpoint: "/api/v1/supply"
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`\n==================================================`);
   console.log(`🚀 [AURELIUS NODE 01] FULL DECK ONLINE AT PORT ${PORT}`);
