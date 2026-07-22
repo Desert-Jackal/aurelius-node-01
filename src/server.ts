@@ -2,9 +2,9 @@
 import cors from "cors";
 import path from "path";
 import "dotenv/config";
-import { verifyPaymentAuthorization, RECEIVER_WALLET } from "./utils/crypto.js";
-import { db, initDatabase, seedSampleData } from "./db/database.js";
-import { scrapeLiveFuelPrices } from "./scraper.js";
+import { db } from "./db/database";
+import { verifyPaymentAuthorization, RECEIVER_WALLET } from "./utils/crypto";
+import { scrapeLiveFuelPrices } from "./scraper";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), "public")));
 
-// Ensure base tables exist in SQLite
+// Ensure payment ledger table exists
 db.exec(`
   CREATE TABLE IF NOT EXISTS payment_ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,22 +25,7 @@ db.exec(`
   );
 `);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS inventory (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_name TEXT,
-    category TEXT,
-    stock_level INTEGER,
-    unit_price_usd TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-// Initialize database schema & seed initial ground-truth tables
-initDatabase();
-seedSampleData();
-
-// 🔄 Background Oracle Cycle (Populates live scraped data)
+// 🔄 Background Oracle Cycle (Syncs scraped data into fuel_prices table)
 async function runOracleCycle() {
   try {
     const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
@@ -50,21 +35,16 @@ async function runOracleCycle() {
 
     if (liveItems.length > 0) {
       const stmt = db.prepare(`
-        INSERT INTO inventory (item_name, category, stock_level, unit_price_usd)
-        VALUES (?, ?, ?, ?)
+        UPDATE fuel_prices 
+        SET diesel_rack_usd = ?, updated_at = ? 
+        WHERE location LIKE '%Houston%'
       `);
 
       for (const item of liveItems) {
-        stmt.run(item.item_name, item.category, item.stock_level, item.unit_price_usd);
-        console.log(`  [SCRAPED DATA SYNC] ${item.item_name} -> $${item.unit_price_usd}/gal`);
+        stmt.run(item.unit_price_usd, timestamp);
+        console.log(`  [SCRAPED DATA SYNC] Houston Diesel Rack -> $${item.unit_price_usd}/gal`);
       }
     }
-
-    // Dynamic market update simulation for remaining material inventory
-    const steelDelta = Math.floor(Math.random() * 5) - 2;
-    db.prepare(
-      "UPDATE inventory SET stock_level = MAX(10, stock_level + ?), updated_at = ? WHERE id = 1"
-    ).run(steelDelta, timestamp);
 
     console.log(`🔄 [ORACLE CYCLE] Live inventory updated | Sync: ${timestamp}`);
   } catch (err: any) {
@@ -108,7 +88,6 @@ app.get("/.well-known/agent.json", (req: Request, res: Response) => {
     ],
     endpoints: {
       health: `${baseUrl}/health`,
-      dashboard: `${baseUrl}/dashboard`,
       supply_matrix: `${baseUrl}/api/v1/supply`
     }
   });
@@ -157,14 +136,20 @@ app.get("/api/v1/supply", async (req: Request, res: Response) => {
       `INSERT INTO payment_ledger (payer_address, recipient_address, amount_usd, tx_status) VALUES (?, ?, ?, ?)`
     ).run(verification.payer, RECEIVER_WALLET, "0.05", "SETTLED_AUTHORIZED");
 
-    const inventory = db.prepare("SELECT * FROM inventory ORDER BY id ASC").all();
+    // Fetch live tables from ground_truth.db
+    const inventory = db.prepare("SELECT * FROM industrial_inventory ORDER BY id ASC").all();
+    const fuel = db.prepare("SELECT * FROM fuel_prices ORDER BY id ASC").all();
+    const freight = db.prepare("SELECT * FROM hotshot_freight_lanes ORDER BY id ASC").all();
 
     return res.status(200).json({
       node: "Aurelius Node 01",
       authenticated_payer: verification.payer,
       amount_paid_usd: "0.05",
-      record_count: inventory.length,
-      data: inventory
+      data: {
+        industrial_inventory: inventory,
+        fuel_rack_prices: fuel,
+        hotshot_freight_lanes: freight
+      }
     });
   } catch (err: any) {
     console.error("❌ [SERVER ROUTE ERROR]:", err);
