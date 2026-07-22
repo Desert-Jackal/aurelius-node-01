@@ -1,8 +1,16 @@
 import Database from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 
 // Initialize SQLite database file in the project root
 const dbPath = path.join(process.cwd(), "ground_truth.db");
+
+// Ensure parent directory exists before opening SQLite!
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 export const db = new Database(dbPath);
 
 // Enable Write-Ahead Logging (WAL) for high-concurrency read performance
