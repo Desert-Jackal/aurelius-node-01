@@ -2,8 +2,10 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-// Initialize SQLite database file in the project root
-const dbPath = path.join(process.cwd(), "ground_truth.db");
+// Use /tmp for cloud deployments (Render/Linux), or local root for local development
+const dbPath = process.env.RENDER
+  ? "/tmp/ground_truth.db"
+  : path.join(process.cwd(), "ground_truth.db");
 
 // Ensure parent directory exists before opening SQLite!
 const dbDir = path.dirname(dbPath);
