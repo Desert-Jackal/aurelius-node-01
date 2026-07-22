@@ -4,7 +4,7 @@ import path from "path";
 import "dotenv/config";
 import { db } from "./db/database";
 import { verifyPaymentAuthorization, RECEIVER_WALLET } from "./utils/crypto";
-import { scrapeLiveFuelPrices } from "./scraper";
+import { runOracleHarvest } from "./scraper";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -71,27 +71,35 @@ db.exec(`
   (3, 'San Antonio -> Laredo (Border Freight)', '3.65', datetime('now'));
 `);
 
-// 🔄 Background Oracle Cycle (Syncs scraped data into fuel_prices table)
+// 🔄 Background Oracle Cycle (Pulls EIA, FRED, & Scraped Data)
 async function runOracleCycle() {
   try {
     const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
+    const items = await runOracleHarvest();
 
-    const liveItems = await scrapeLiveFuelPrices();
+    for (const item of items) {
+      if (item.category === "Fuel" && item.value) {
+        db.prepare(`
+          UPDATE fuel_prices 
+          SET diesel_rack_usd = ?, updated_at = ? 
+          WHERE location LIKE '%Houston%' OR location LIKE '%DFW%'
+        `).run(item.value, timestamp);
 
-    if (liveItems.length > 0) {
-      const stmt = db.prepare(`
-        UPDATE fuel_prices 
-        SET diesel_rack_usd = ?, updated_at = ? 
-        WHERE location LIKE '%Houston%'
-      `);
+        console.log(`  [ORACLE SYNC] ${item.name} -> $${item.value} (${item.source})`);
+      }
 
-      for (const item of liveItems) {
-        stmt.run(item.unit_price_usd, timestamp);
-        console.log(`  [SCRAPED DATA SYNC] Houston Diesel Rack -> $${item.unit_price_usd}/gal`);
+      if (item.category === "Metals Index" && item.value) {
+        db.prepare(`
+          UPDATE industrial_inventory 
+          SET unit_price_usd = ?, updated_at = ? 
+          WHERE item_name LIKE '%Structural Steel%'
+        `).run(item.value, timestamp);
+
+        console.log(`  [ORACLE SYNC] ${item.name} -> ${item.value} (${item.source})`);
       }
     }
 
-    console.log(`🔄 [ORACLE CYCLE] Live inventory updated | Sync: ${timestamp}`);
+    console.log(`🔄 [ORACLE CYCLE COMPLETE] Baseline Ground-Truth Synced | ${timestamp}`);
   } catch (err: any) {
     console.error("❌ [ORACLE CYCLE ERROR]:", err.message);
   }
