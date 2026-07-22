@@ -13,8 +13,32 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), "public")));
 
-// Ensure payment ledger table exists
+// 🛠️ Ensure ALL tables exist & are seeded before running cycles
 db.exec(`
+  CREATE TABLE IF NOT EXISTS industrial_inventory (
+    id INTEGER PRIMARY KEY,
+    item_name TEXT,
+    category TEXT,
+    stock_level INTEGER,
+    unit_price_usd TEXT,
+    updated_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS fuel_prices (
+    id INTEGER PRIMARY KEY,
+    location TEXT,
+    diesel_rack_usd TEXT,
+    gas_unleaded_usd TEXT,
+    updated_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS hotshot_freight_lanes (
+    id INTEGER PRIMARY KEY,
+    lane_name TEXT,
+    expedited_rate_per_mile TEXT,
+    updated_at TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS payment_ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     payer_address TEXT NOT NULL,
@@ -23,6 +47,28 @@ db.exec(`
     tx_status TEXT NOT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- Seed fuel prices if empty
+  INSERT OR IGNORE INTO fuel_prices (id, location, diesel_rack_usd, gas_unleaded_usd, updated_at) VALUES 
+  (1, 'DFW Terminal (Irving)', '3.45', '2.92', datetime('now')),
+  (2, 'Houston Ship Channel', '3.35', '2.79', datetime('now')),
+  (3, 'Permian Hub (Midland)', '3.68', '3.12', datetime('now')),
+  (4, 'San Antonio Terminal', '3.40', '2.85', datetime('now'));
+
+  -- Seed inventory if empty
+  INSERT OR IGNORE INTO industrial_inventory (id, item_name, category, stock_level, unit_price_usd, updated_at) VALUES
+  (1, '3/4" Structural Steel Plate (A36)', 'Metals', 142, '850.00', datetime('now')),
+  (2, 'Schedule 40 Carbon Steel Pipe 4"', 'Piping', 88, '42.50', datetime('now')),
+  (3, 'Class 300 Flanged Gate Valves 2"', 'Valves', 34, '310.00', datetime('now')),
+  (4, 'SYP #2 Structural Lumber 2x6x16', 'Lumber', 520, '14.25', datetime('now')),
+  (5, 'Crushed Texas Limestone (Base Grade 2)', 'Aggregates', 1200, '22.00', datetime('now')),
+  (6, 'Type I/II Portland Cement (94lb Bags)', 'Cement', 310, '16.50', datetime('now'));
+
+  -- Seed freight lanes if empty
+  INSERT OR IGNORE INTO hotshot_freight_lanes (id, lane_name, expedited_rate_per_mile, updated_at) VALUES
+  (1, 'Dallas/Fort Worth -> Houston Corridor', '3.85', datetime('now')),
+  (2, 'Midland/Odessa -> Houston (Permian Basin)', '4.20', datetime('now')),
+  (3, 'San Antonio -> Laredo (Border Freight)', '3.65', datetime('now'));
 `);
 
 // 🔄 Background Oracle Cycle (Syncs scraped data into fuel_prices table)
@@ -30,7 +76,6 @@ async function runOracleCycle() {
   try {
     const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
 
-    // Fetch live fuel prices from public web scraper
     const liveItems = await scrapeLiveFuelPrices();
 
     if (liveItems.length > 0) {
