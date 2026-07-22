@@ -1,33 +1,54 @@
-﻿import { db } from "../db/database.js";
+﻿import axios from 'axios';
+import * as cheerio from 'cheerio';
 
-export async function runScraperCycle() {
-  console.log("\n==================================================");
-  console.log("🔄 [ORACLE CYCLE] Fetching live regional market feed...");
+export interface ScrapedItem {
+  item_name: string;
+  category: string;
+  stock_level: number;
+  unit_price_usd: string;
+}
 
+/**
+ * Scrapes real-time Gulf Coast wholesale spot prices from EIA
+ */
+export async function scrapeLiveFuelPrices(): Promise<ScrapedItem[]> {
   try {
-    const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
+    const url = 'https://www.eia.gov/todayinenergy/prices.php';
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Aurelius-Node-01-Agent; Fleet Intelligence Engine)'
+      },
+      timeout: 8000
+    });
 
-    // 1. Update DFW Fuel Price
-    const fuelVariability = (Math.random() * 0.06 - 0.03).toFixed(2);
-    const newDieselPrice = (3.45 + parseFloat(fuelVariability)).toFixed(2);
-    db.prepare(`UPDATE fuel_prices SET diesel_rack_usd = ?, updated_at = ? WHERE id = 1`).run(newDieselPrice, timestamp);
+    const $ = cheerio.load(response.data);
+    const items: ScrapedItem[] = [];
 
-    // 2. Update Steel Inventory Level
-    const steelDelta = Math.floor(Math.random() * 5) - 2;
-    db.prepare(`UPDATE industrial_inventory SET stock_level = MAX(10, stock_level + ?), updated_at = ? WHERE id = 1`).run(steelDelta, timestamp);
+    $('table tr').each((_, row) => {
+      const text = $(row).text();
 
-    // 3. Update Hotshot Freight Rate
-    const rateDelta = (Math.random() * 0.10 - 0.05).toFixed(2);
-    const newRate = (3.85 + parseFloat(rateDelta)).toFixed(2);
-    db.prepare(`UPDATE hotshot_freight_lanes SET expedited_rate_per_mile = ?, updated_at = ? WHERE id = 1`).run(newRate, timestamp);
+      // Look for Gulf Coast Low-Sulfur Diesel
+      if (text.includes('Low-Sulfur Diesel') || text.includes('Gulf Coast')) {
+        const cells = $(row).find('td');
+        if (cells.length >= 3) {
+          const area = $(cells[0]).text().trim();
+          const price = parseFloat($(cells[1]).text().trim());
 
-    console.log(`✅ [DFW TERMINAL] Diesel Rack: $${newDieselPrice}/gal`);
-    console.log(`✅ [STEEL MATRIX] A36 Plate Stock: Shifted by ${steelDelta >= 0 ? '+' : ''}${steelDelta} units`);
-    console.log(`✅ [LOGISTICS MATRIX] DFW -> Houston Rate: $${newRate}/mi`);
-    console.log(`🕒 [SYNC TIMESTAMP] ${timestamp}`);
-    console.log("==================================================\n");
+          if (area.includes('Gulf Coast') && !isNaN(price)) {
+            items.push({
+              item_name: 'Ultra-Low Sulfur Diesel (Gulf Coast Bulk Spot)',
+              category: 'Fuel',
+              stock_level: 45000,
+              unit_price_usd: price.toFixed(2)
+            });
+          }
+        }
+      }
+    });
 
-  } catch (err: any) {
-    console.error("❌ [SCRAPER] Error:", err.message);
+    return items;
+  } catch (error: any) {
+    console.error('❌ [SCRAPER ERROR]:', error.message);
+    return [];
   }
 }

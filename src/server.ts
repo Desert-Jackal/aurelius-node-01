@@ -4,6 +4,7 @@ import path from "path";
 import "dotenv/config";
 import { verifyPaymentAuthorization, RECEIVER_WALLET } from "./utils/crypto.js";
 import { db, initDatabase, seedSampleData } from "./db/database.js";
+import { scrapeLiveFuelPrices } from "./scraper.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,41 +40,52 @@ db.exec(`
 initDatabase();
 seedSampleData();
 
-// 🔄 Background Oracle Cycle (Populates and updates inventory)
-function runOracleCycle() {
+// 🔄 Background Oracle Cycle (Populates live scraped data)
+async function runOracleCycle() {
   try {
     const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
 
-    // Seed initial inventory if empty
-    const countRow = db.prepare("SELECT COUNT(*) as cnt FROM inventory").get() as { cnt: number };
-    if (!countRow || countRow.cnt === 0) {
-      console.log("🌱 [DATABASE SEED] Inserting initial ground-truth inventory...");
-      db.prepare(`
-        INSERT INTO inventory (item_name, category, stock_level, unit_price_usd) VALUES
-        ('3/4" Structural Steel Plate (A36)', 'Metals', 142, '850.00'),
-        ('Schedule 40 Carbon Steel Pipe 4"', 'Piping', 88, '42.50'),
-        ('Class 300 Flanged Gate Valves 2"', 'Valves', 34, '310.00'),
-        ('SYP #2 Structural Lumber 2x6x16', 'Lumber', 520, '14.25'),
-        ('Crushed Texas Limestone (Base Grade 2)', 'Aggregates', 1200, '22.00'),
-        ('Type I/II Portland Cement (94lb Bags)', 'Cement', 310, '16.50')
-      `).run();
+    // Fetch live fuel prices from public web scraper
+    const liveItems = await scrapeLiveFuelPrices();
+
+    if (liveItems.length > 0) {
+      const stmt = db.prepare(`
+        INSERT INTO inventory (item_name, category, stock_level, unit_price_usd)
+        VALUES (?, ?, ?, ?)
+      `);
+
+      for (const item of liveItems) {
+        stmt.run(item.item_name, item.category, item.stock_level, item.unit_price_usd);
+        console.log(`  [SCRAPED DATA SYNC] ${item.item_name} -> $${item.unit_price_usd}/gal`);
+      }
     }
 
-    // Dynamic market update simulation
+    // Dynamic market update simulation for remaining material inventory
     const steelDelta = Math.floor(Math.random() * 5) - 2;
     db.prepare(
       "UPDATE inventory SET stock_level = MAX(10, stock_level + ?), updated_at = ? WHERE id = 1"
     ).run(steelDelta, timestamp);
 
-    console.log(`🔄 [ORACLE CYCLE] Live inventory updated | Steel Delta: ${steelDelta >= 0 ? '+' : ''}${steelDelta} | Sync: ${timestamp}`);
+    console.log(`🔄 [ORACLE CYCLE] Live inventory updated | Sync: ${timestamp}`);
   } catch (err: any) {
     console.error("❌ [ORACLE CYCLE ERROR]:", err.message);
   }
 }
 
-// Run initial cycle & schedule background updates every 15 seconds
+// Run initial cycle & schedule background updates every 30 seconds
 runOracleCycle();
-setInterval(runOracleCycle, 15000);
+setInterval(runOracleCycle, 30000);
+
+// 🏠 Root Redirect / Welcome
+app.get("/", (req: Request, res: Response) => {
+  res.json({
+    message: "Welcome to Aurelius Node 01",
+    status: "ONLINE",
+    manifest: "/.well-known/agent.json",
+    health: "/health",
+    supply_endpoint: "/api/v1/supply"
+  });
+});
 
 // 🌐 Agent Discovery Manifest
 app.get("/.well-known/agent.json", (req: Request, res: Response) => {
@@ -158,17 +170,6 @@ app.get("/api/v1/supply", async (req: Request, res: Response) => {
     console.error("❌ [SERVER ROUTE ERROR]:", err);
     return res.status(500).json({ error: "Internal Server Error", details: err.message });
   }
-});
-
-// 🏠 Root Redirect / Welcome
-app.get("/", (req: Request, res: Response) => {
-  res.json({
-    message: "Welcome to Aurelius Node 01",
-    status: "ONLINE",
-    manifest: "/.well-known/agent.json",
-    health: "/health",
-    supply_endpoint: "/api/v1/supply"
-  });
 });
 
 app.listen(PORT, () => {
