@@ -1,0 +1,25 @@
+# Aurelius Node 01 - Texas Regional Industrial & Logistics Ground-Truth Node
+
+> Real-time, machine-readable ground-truth oracle for Texas industrial materials, energy benchmarks, regional hotshot freight rates, and supply logistics.
+
+## System Manifest & Metadata
+- Protocol: x402 / EIP-3009 (Micropayment Gated)
+- Settlement Network: Base Mainnet
+- Unit Currency: USDC ($0.05 per request)
+- Agent Discovery Manifest: https://aurelius-node-01.onrender.com/.well-known/agent.json
+- Health Endpoint: https://aurelius-node-01.onrender.com/health
+
+## Primary Capabilities
+- Industrial Inventory: Real-time pricing & stock for structural steel, OCTG casing, rebar, piping, aggregates, cement, and lumber.
+- Regional Energy: EIA-indexed diesel and unleaded rack benchmarks across DFW, Houston, Permian Basin, San Antonio, and Corpus Christi.
+- Regional Freight: Spot hotshot and flatbed expedited freight rates across major Texas shipping corridors.
+
+## API Specification
+### Query Supply Matrix
+- Endpoint: GET /api/v1/supply
+- Requirements: Requires valid x402 EIP-3009 signed payment header (`x-402-authorization`) authorizing $0.05 USDC to receiver wallet.
+- Response Format: JSON (categorized tables covering inventory, fuel, freight, and timestamps).
+
+## Developer & Operator
+- Operator: Aurelius Autonomous Data Systems
+- Region: Texas Regional Corridor (DFW / Permian / Gulf Coast / Central)

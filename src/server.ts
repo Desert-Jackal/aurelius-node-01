@@ -200,6 +200,11 @@ app.get("/health", (req: Request, res: Response) => {
   res.json({ status: "ONLINE", node: "Aurelius-01", timestamp: new Date().toISOString() });
 });
 
+// 📄 LLM / AI Agent Discovery Standard
+app.get(["/llms.txt", "/.well-known/llms.txt"], (req: Request, res: Response) => {
+  res.sendFile(path.join(process.cwd(), "public", "llms.txt"));
+});
+
 // 🔒 Gated Supply Endpoint ($0.05 USDC)
 app.get("/api/v1/supply", async (req: Request, res: Response) => {
   try {
