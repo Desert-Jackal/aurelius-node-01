@@ -7,6 +7,13 @@ import { verifyPaymentAuthorization, RECEIVER_WALLET } from "./utils/crypto";
 import { runOracleHarvest } from "./scraper";
 
 const app = express();
+
+// 📍 Serve static manifest files (llms.txt, robots.txt) from root public folder
+app.use(express.static(path.join(__dirname, "../public")));
+app.use(express.static(path.join(__dirname, "public"))); // Fallback for dev mode
+
+app.use(cors());
+app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
