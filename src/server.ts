@@ -13,63 +13,114 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), "public")));
 
-// 🛠️ Ensure ALL tables exist & are seeded before running cycles
+// 🗄️ Database Schema & Seeding (Expanded Matrix)
 db.exec(`
   CREATE TABLE IF NOT EXISTS industrial_inventory (
-    id INTEGER PRIMARY KEY,
-    item_name TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_name TEXT UNIQUE,
     category TEXT,
     stock_level INTEGER,
     unit_price_usd TEXT,
-    updated_at TEXT
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS fuel_prices (
-    id INTEGER PRIMARY KEY,
-    location TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location TEXT UNIQUE,
     diesel_rack_usd TEXT,
     gas_unleaded_usd TEXT,
-    updated_at TEXT
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS hotshot_freight_lanes (
-    id INTEGER PRIMARY KEY,
-    lane_name TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lane_name TEXT UNIQUE,
     expedited_rate_per_mile TEXT,
-    updated_at TEXT
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS payment_ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payer_address TEXT NOT NULL,
-    recipient_address TEXT NOT NULL,
-    amount_usd TEXT NOT NULL,
-    tx_status TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    payer_address TEXT,
+    recipient_address TEXT,
+    amount_usd TEXT,
+    tx_status TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
-
-  -- Seed fuel prices if empty
-  INSERT OR IGNORE INTO fuel_prices (id, location, diesel_rack_usd, gas_unleaded_usd, updated_at) VALUES 
-  (1, 'DFW Terminal (Irving)', '3.45', '2.92', datetime('now')),
-  (2, 'Houston Ship Channel', '3.35', '2.79', datetime('now')),
-  (3, 'Permian Hub (Midland)', '3.68', '3.12', datetime('now')),
-  (4, 'San Antonio Terminal', '3.40', '2.85', datetime('now'));
-
-  -- Seed inventory if empty
-  INSERT OR IGNORE INTO industrial_inventory (id, item_name, category, stock_level, unit_price_usd, updated_at) VALUES
-  (1, '3/4" Structural Steel Plate (A36)', 'Metals', 142, '850.00', datetime('now')),
-  (2, 'Schedule 40 Carbon Steel Pipe 4"', 'Piping', 88, '42.50', datetime('now')),
-  (3, 'Class 300 Flanged Gate Valves 2"', 'Valves', 34, '310.00', datetime('now')),
-  (4, 'SYP #2 Structural Lumber 2x6x16', 'Lumber', 520, '14.25', datetime('now')),
-  (5, 'Crushed Texas Limestone (Base Grade 2)', 'Aggregates', 1200, '22.00', datetime('now')),
-  (6, 'Type I/II Portland Cement (94lb Bags)', 'Cement', 310, '16.50', datetime('now'));
-
-  -- Seed freight lanes if empty
-  INSERT OR IGNORE INTO hotshot_freight_lanes (id, lane_name, expedited_rate_per_mile, updated_at) VALUES
-  (1, 'Dallas/Fort Worth -> Houston Corridor', '3.85', datetime('now')),
-  (2, 'Midland/Odessa -> Houston (Permian Basin)', '4.20', datetime('now')),
-  (3, 'San Antonio -> Laredo (Border Freight)', '3.65', datetime('now'));
 `);
+
+// 🌾 Seed Ground-Truth Data (Upsert to preserve existing updates)
+const seedInventory = [
+  // Metals & Structural
+  ["3/4\" Structural Steel Plate (A36)", "Metals", 142, "361.4"],
+  ["Schedule 40 Carbon Steel Pipe 4\"", "Piping", 88, "42.50"],
+  ["Class 300 Flanged Gate Valves 2\"", "Valves", 34, "310.00"],
+  ["Grade 60 Rebar #5 (20ft Lengths)", "Metals", 850, "12.80"],
+  
+  // Lumber & Building Materials
+  ["SYP #2 Structural Lumber 2x6x16", "Lumber", 520, "14.25"],
+  ["3/4\" CDX Plywood Sheathing 4x8", "Lumber", 310, "29.50"],
+  
+  // Concrete & Aggregates
+  ["Crushed Texas Limestone (Base Grade 2)", "Aggregates", 1200, "22.00"],
+  ["Type I/II Portland Cement (94lb Bags)", "Cement", 310, "16.50"],
+  ["Ready-Mix Structural Concrete (4000 PSI / Yard)", "Concrete", 450, "145.00"],
+
+  // Energy & Oilfield Supplies
+  ["13-3/8\" API Spec Casing Pipe (OCTG)", "Oilfield", 65, "185.00"],
+  ["API Drilling Mud / Bentonite (100lb Bag)", "Oilfield", 900, "18.50"],
+  ["High-Pressure 2\" Swivel Joint 1502", "Oilfield", 28, "850.00"]
+];
+
+const seedStmt = db.prepare(`
+  INSERT INTO industrial_inventory (item_name, category, stock_level, unit_price_usd)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(item_name) DO UPDATE SET
+    stock_level = excluded.stock_level,
+    category = excluded.category
+`);
+
+for (const item of seedInventory) {
+  seedStmt.run(item[0], item[1], item[2], item[3]);
+}
+
+// Seed Fuel Rack Prices
+const seedFuel = [
+  ["DFW Terminal (Irving)", "3.45", "2.92"],
+  ["Houston Ship Channel", "3.35", "2.79"],
+  ["Permian Hub (Midland)", "3.68", "3.12"],
+  ["San Antonio Terminal", "3.40", "2.85"],
+  ["Corpus Christi Port Terminal", "3.38", "2.81"]
+];
+
+const fuelStmt = db.prepare(`
+  INSERT INTO fuel_prices (location, diesel_rack_usd, gas_unleaded_usd)
+  VALUES (?, ?, ?)
+  ON CONFLICT(location) DO NOTHING
+`);
+
+for (const f of seedFuel) {
+  fuelStmt.run(f[0], f[1], f[2]);
+}
+
+// Seed Hotshot Freight Lanes
+const seedLanes = [
+  ["Dallas/Fort Worth -> Houston Corridor", "3.85"],
+  ["Midland/Odessa -> Houston (Permian Basin)", "4.20"],
+  ["San Antonio -> Laredo (Border Freight)", "3.65"],
+  ["Pecos/Orla -> Houston Port (Heavy Oilfield Equipment)", "4.60"],
+  ["El Paso -> Dallas/Fort Worth (Cross-State Flatbed)", "3.40"]
+];
+
+const laneStmt = db.prepare(`
+  INSERT INTO hotshot_freight_lanes (lane_name, expedited_rate_per_mile)
+  VALUES (?, ?)
+  ON CONFLICT(lane_name) DO NOTHING
+`);
+
+for (const l of seedLanes) {
+  laneStmt.run(l[0], l[1]);
+}
 
 // 🔄 Background Oracle Cycle (Pulls EIA, FRED, & Scraped Data)
 async function runOracleCycle() {
@@ -78,24 +129,22 @@ async function runOracleCycle() {
     const items = await runOracleHarvest();
 
     for (const item of items) {
+      console.log(`  [ORACLE HARVESTED] ${item.name} -> ${item.value} ${item.unit} (${item.source})`);
+
       if (item.category === "Fuel" && item.value) {
         db.prepare(`
           UPDATE fuel_prices 
           SET diesel_rack_usd = ?, updated_at = ? 
-          WHERE location LIKE '%Houston%' OR location LIKE '%DFW%'
+          WHERE location LIKE '%Houston%' OR location LIKE '%DFW%' OR location LIKE '%Permian%'
         `).run(item.value, timestamp);
-
-        console.log(`  [ORACLE SYNC] ${item.name} -> $${item.value} (${item.source})`);
       }
 
       if (item.category === "Metals Index" && item.value) {
         db.prepare(`
           UPDATE industrial_inventory 
           SET unit_price_usd = ?, updated_at = ? 
-          WHERE item_name LIKE '%Structural Steel%'
+          WHERE item_name LIKE '%Structural Steel%' OR item_name LIKE '%Rebar%'
         `).run(item.value, timestamp);
-
-        console.log(`  [ORACLE SYNC] ${item.name} -> ${item.value} (${item.source})`);
       }
     }
 
@@ -105,9 +154,9 @@ async function runOracleCycle() {
   }
 }
 
-// Run initial cycle & schedule background updates every 30 seconds
+// Run initial cycle on startup & schedule background updates every 30 minutes
 runOracleCycle();
-setInterval(runOracleCycle, 30000);
+setInterval(runOracleCycle, 1800000);
 
 // 🏠 Root Redirect / Welcome
 app.get("/", (req: Request, res: Response) => {
