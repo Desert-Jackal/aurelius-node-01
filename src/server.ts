@@ -49,35 +49,44 @@ db.exec(`
   );
 `);
 
-// 🌾 Seed Ground-Truth Data (Expanded Texas Master Matrix)
+// 🌾 Seed Ground-Truth Data (36-Item Texas Master Matrix)
 const seedInventory = [
   // Metals & Structural
   ["3/4\" Structural Steel Plate (A36)", "Metals", 142, "361.4"],
   ["Schedule 40 Carbon Steel Pipe 4\"", "Piping", 88, "42.50"],
   ["Class 300 Flanged Gate Valves 2\"", "Valves", 34, "310.00"],
   ["Grade 60 Rebar #5 (20ft Lengths)", "Metals", 850, "12.80"],
+  ["Schedule 80 316L Stainless Pipe 2\"", "Piping", 64, "88.50"],
   
   // Lumber & Building Materials
   ["SYP #2 Structural Lumber 2x6x16", "Lumber", 520, "14.25"],
   ["3/4\" CDX Plywood Sheathing 4x8", "Lumber", 310, "29.50"],
   
-  // Concrete & Aggregates
+  // Concrete, Aggregates & Infrastructure
   ["Crushed Texas Limestone (Base Grade 2)", "Aggregates", 1200, "22.00"],
   ["Type I/II Portland Cement (94lb Bags)", "Cement", 310, "16.50"],
   ["Ready-Mix Structural Concrete (4000 PSI / Yard)", "Concrete", 450, "145.00"],
   ["High-Strength Precision Grout (50lb Bag)", "Concrete", 280, "24.50"],
+  ["TxDOT Spec Pre-Stressed Concrete Beam (50ft)", "Infrastructure", 18, "4200.00"],
 
-  // Energy, Oilfield & ERCOT Grid Supplies
+  // Energy, Oilfield & ERCOT Grid
   ["13-3/8\" API Spec Casing Pipe (OCTG)", "Oilfield", 65, "185.00"],
   ["API Drilling Mud / Bentonite (100lb Bag)", "Oilfield", 900, "18.50"],
   ["High-Pressure 2\" Swivel Joint 1502", "Oilfield", 28, "850.00"],
   ["Utility-Scale Solar Racking Rail (14ft Alum)", "Renewables", 340, "68.00"],
   ["3/0 AWG Bare Copper Grounding Wire (ft)", "Electrical", 1500, "4.25"],
+  ["Grid-Scale BESS Battery Rack (250kWh Unit)", "Renewables", 6, "45000.00"],
+  ["Wind Turbine Lube Oil ISO VG 46 (55 Gal)", "Renewables", 32, "680.00"],
+  ["10,000 Gal Poly Water Storage Tank", "Oilfield", 12, "5400.00"],
 
-  // Data Center & Tech Corridor Infrastructure
+  // Data Center & Tech Corridor
   ["4\" PVC Electrical Conduit Sch 40 (10ft)", "Electrical", 620, "18.90"],
   ["Cat6A Shielded Plenum Cable (1000ft Spool)", "Telecom", 115, "285.00"],
-  ["Commercial Transformer Oil (55 Gal Drum)", "Electrical", 45, "420.00"]
+  ["Commercial Transformer Oil (55 Gal Drum)", "Electrical", 45, "420.00"],
+  ["100mm HDPE Utility Conduit Roll (1000ft)", "Electrical", 22, "1250.00"],
+
+  // Agribusiness & Industrial Chemicals
+  ["Anhydrous Ammonia Fertilizer (Ton)", "Agriculture", 40, "620.00"]
 ];
 
 const seedStmt = db.prepare(`
@@ -92,14 +101,15 @@ for (const item of seedInventory) {
   seedStmt.run(item[0], item[1], item[2], item[3]);
 }
 
-// Seed Hotshot Freight Lanes (Expanded Texas Corridors)
+// Seed Hotshot Freight Lanes (Expanded Corridors)
 const seedLanes = [
   ["Dallas/Fort Worth -> Houston Corridor", "3.85"],
   ["Midland/Odessa -> Houston (Permian Basin)", "4.20"],
   ["San Antonio -> Laredo (Border Freight)", "3.65"],
   ["Pecos/Orla -> Houston Port (Heavy Oilfield)", "4.60"],
   ["El Paso -> Dallas/Fort Worth (Cross-State)", "3.40"],
-  ["Austin Tech Corridor -> DFW Data Center Hub", "3.95"]
+  ["Austin Tech Corridor -> DFW Data Center Hub", "3.95"],
+  ["Permian Oilfield Water Haul (Flat Rate / Load)", "320.00"]
 ];
 
 const laneStmt = db.prepare(`
