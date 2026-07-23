@@ -49,7 +49,7 @@ db.exec(`
   );
 `);
 
-// 🌾 Seed Ground-Truth Data (Upsert to preserve existing updates)
+// 🌾 Seed Ground-Truth Data (Expanded Texas Master Matrix)
 const seedInventory = [
   // Metals & Structural
   ["3/4\" Structural Steel Plate (A36)", "Metals", 142, "361.4"],
@@ -65,11 +65,19 @@ const seedInventory = [
   ["Crushed Texas Limestone (Base Grade 2)", "Aggregates", 1200, "22.00"],
   ["Type I/II Portland Cement (94lb Bags)", "Cement", 310, "16.50"],
   ["Ready-Mix Structural Concrete (4000 PSI / Yard)", "Concrete", 450, "145.00"],
+  ["High-Strength Precision Grout (50lb Bag)", "Concrete", 280, "24.50"],
 
-  // Energy & Oilfield Supplies
+  // Energy, Oilfield & ERCOT Grid Supplies
   ["13-3/8\" API Spec Casing Pipe (OCTG)", "Oilfield", 65, "185.00"],
   ["API Drilling Mud / Bentonite (100lb Bag)", "Oilfield", 900, "18.50"],
-  ["High-Pressure 2\" Swivel Joint 1502", "Oilfield", 28, "850.00"]
+  ["High-Pressure 2\" Swivel Joint 1502", "Oilfield", 28, "850.00"],
+  ["Utility-Scale Solar Racking Rail (14ft Alum)", "Renewables", 340, "68.00"],
+  ["3/0 AWG Bare Copper Grounding Wire (ft)", "Electrical", 1500, "4.25"],
+
+  // Data Center & Tech Corridor Infrastructure
+  ["4\" PVC Electrical Conduit Sch 40 (10ft)", "Electrical", 620, "18.90"],
+  ["Cat6A Shielded Plenum Cable (1000ft Spool)", "Telecom", 115, "285.00"],
+  ["Commercial Transformer Oil (55 Gal Drum)", "Electrical", 45, "420.00"]
 ];
 
 const seedStmt = db.prepare(`
@@ -82,6 +90,26 @@ const seedStmt = db.prepare(`
 
 for (const item of seedInventory) {
   seedStmt.run(item[0], item[1], item[2], item[3]);
+}
+
+// Seed Hotshot Freight Lanes (Expanded Texas Corridors)
+const seedLanes = [
+  ["Dallas/Fort Worth -> Houston Corridor", "3.85"],
+  ["Midland/Odessa -> Houston (Permian Basin)", "4.20"],
+  ["San Antonio -> Laredo (Border Freight)", "3.65"],
+  ["Pecos/Orla -> Houston Port (Heavy Oilfield)", "4.60"],
+  ["El Paso -> Dallas/Fort Worth (Cross-State)", "3.40"],
+  ["Austin Tech Corridor -> DFW Data Center Hub", "3.95"]
+];
+
+const laneStmt = db.prepare(`
+  INSERT INTO hotshot_freight_lanes (lane_name, expedited_rate_per_mile)
+  VALUES (?, ?)
+  ON CONFLICT(lane_name) DO NOTHING
+`);
+
+for (const l of seedLanes) {
+  laneStmt.run(l[0], l[1]);
 }
 
 // Seed Fuel Rack Prices
@@ -101,25 +129,6 @@ const fuelStmt = db.prepare(`
 
 for (const f of seedFuel) {
   fuelStmt.run(f[0], f[1], f[2]);
-}
-
-// Seed Hotshot Freight Lanes
-const seedLanes = [
-  ["Dallas/Fort Worth -> Houston Corridor", "3.85"],
-  ["Midland/Odessa -> Houston (Permian Basin)", "4.20"],
-  ["San Antonio -> Laredo (Border Freight)", "3.65"],
-  ["Pecos/Orla -> Houston Port (Heavy Oilfield Equipment)", "4.60"],
-  ["El Paso -> Dallas/Fort Worth (Cross-State Flatbed)", "3.40"]
-];
-
-const laneStmt = db.prepare(`
-  INSERT INTO hotshot_freight_lanes (lane_name, expedited_rate_per_mile)
-  VALUES (?, ?)
-  ON CONFLICT(lane_name) DO NOTHING
-`);
-
-for (const l of seedLanes) {
-  laneStmt.run(l[0], l[1]);
 }
 
 // 🔄 Background Oracle Cycle (Pulls EIA, FRED, & Scraped Data)
