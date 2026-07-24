@@ -21,142 +21,569 @@ app.use(express.json());
 app.use(express.static(path.join(process.cwd(), "public")));
 
 // 🗄️ Database Schema & Seeding (Expanded Matrix)
+// 1. Create or Upgrade Table Schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS industrial_inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     item_name TEXT UNIQUE,
     category TEXT,
     stock_level INTEGER,
-    unit_price_usd TEXT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS fuel_prices (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    location TEXT UNIQUE,
-    diesel_rack_usd TEXT,
-    gas_unleaded_usd TEXT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS hotshot_freight_lanes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lane_name TEXT UNIQUE,
-    expedited_rate_per_mile TEXT,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS payment_ledger (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    payer_address TEXT,
-    recipient_address TEXT,
-    amount_usd TEXT,
-    tx_status TEXT,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    unit_price_usd REAL,
+    unit_of_measure TEXT,
+    spec_grade TEXT,
+    hub_name TEXT,
+    city TEXT,
+    state TEXT,
+    zip_code TEXT,
+    lat REAL,
+    lng REAL,
+    weight_lbs_per_unit REAL,
+    length_ft REAL,
+    availability_type TEXT,
+    lead_time_hours INTEGER,
+    hazmat BOOLEAN,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
 
 // 🌾 Seed Ground-Truth Data (36-Item Texas Master Matrix)
-const seedInventory = [
-  // Metals & Structural
-  ["3/4\" Structural Steel Plate (A36)", "Metals", 142, "361.4"],
-  ["Schedule 40 Carbon Steel Pipe 4\"", "Piping", 88, "42.50"],
-  ["Class 300 Flanged Gate Valves 2\"", "Valves", 34, "310.00"],
-  ["Grade 60 Rebar #5 (20ft Lengths)", "Metals", 850, "12.80"],
-  ["Schedule 80 316L Stainless Pipe 2\"", "Piping", 64, "88.50"],
-  
-  // Lumber & Building Materials
-  ["SYP #2 Structural Lumber 2x6x16", "Lumber", 520, "14.25"],
-  ["3/4\" CDX Plywood Sheathing 4x8", "Lumber", 310, "29.50"],
-  
-  // Concrete, Aggregates & Infrastructure
-  ["Crushed Texas Limestone (Base Grade 2)", "Aggregates", 1200, "22.00"],
-  ["Type I/II Portland Cement (94lb Bags)", "Cement", 310, "16.50"],
-  ["Ready-Mix Structural Concrete (4000 PSI / Yard)", "Concrete", 450, "145.00"],
-  ["High-Strength Precision Grout (50lb Bag)", "Concrete", 280, "24.50"],
-  ["TxDOT Spec Pre-Stressed Concrete Beam (50ft)", "Infrastructure", 18, "4200.00"],
+export const seedInventoryMaster = [
+  // --------------------------------------------------------------------------
+  // 1. METALS & STRUCTURAL
+  // --------------------------------------------------------------------------
+  {
+    item_name: "3/4\" Structural Steel Plate (A36)",
+    category: "Metals",
+    stock_level: 142,
+    unit_price_usd: 361.40,
+    unit_of_measure: "4x8 Sheet",
+    spec_grade: "ASTM A36 Hot Rolled",
+    hub_name: "DFW Industrial Steel Yard",
+    city: "Fort Worth",
+    state: "TX",
+    zip_code: "76102",
+    lat: 32.7555,
+    lng: -97.3308,
+    weight_lbs_per_unit: 980.0, // 30.63 lb/sqft * 32 sqft
+    length_ft: 8.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Schedule 40 Carbon Steel Pipe 4\"",
+    category: "Piping",
+    stock_level: 88,
+    unit_price_usd: 42.50,
+    unit_of_measure: "Linear Foot",
+    spec_grade: "ASTM A53 Grade B / Seamless",
+    hub_name: "DFW Industrial Steel Yard",
+    city: "Fort Worth",
+    state: "TX",
+    zip_code: "76102",
+    lat: 32.7555,
+    lng: -97.3308,
+    weight_lbs_per_unit: 10.79, // ~10.79 lbs/ft
+    length_ft: 20.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Class 300 Flanged Gate Valves 2\"",
+    category: "Valves",
+    stock_level: 34,
+    unit_price_usd: 310.00,
+    unit_of_measure: "Unit",
+    spec_grade: "API 600 / Cast Steel A216 WCB",
+    hub_name: "Houston Ship Channel Valve Hub",
+    city: "Pasadena",
+    state: "TX",
+    zip_code: "77506",
+    lat: 29.7052,
+    lng: -95.2091,
+    weight_lbs_per_unit: 46.0,
+    length_ft: 1.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Grade 60 Rebar #5 (20ft Lengths)",
+    category: "Metals",
+    stock_level: 850,
+    unit_price_usd: 12.80,
+    unit_of_measure: "20ft Stick",
+    spec_grade: "ASTM A615 Grade 60",
+    hub_name: "San Antonio Supply Hub",
+    city: "San Antonio",
+    state: "TX",
+    zip_code: "78219",
+    lat: 29.4241,
+    lng: -98.4936,
+    weight_lbs_per_unit: 20.86,
+    length_ft: 20.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Schedule 80 316L Stainless Pipe 2\"",
+    category: "Piping",
+    stock_level: 64,
+    unit_price_usd: 88.50,
+    unit_of_measure: "Linear Foot",
+    spec_grade: "ASTM A312 TP316L / Seamless",
+    hub_name: "Houston Ship Channel Valve Hub",
+    city: "Pasadena",
+    state: "TX",
+    zip_code: "77506",
+    lat: 29.7052,
+    lng: -95.2091,
+    weight_lbs_per_unit: 5.02,
+    length_ft: 20.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
 
-  // Energy, Oilfield & ERCOT Grid
-  ["13-3/8\" API Spec Casing Pipe (OCTG)", "Oilfield", 65, "185.00"],
-  ["API Drilling Mud / Bentonite (100lb Bag)", "Oilfield", 900, "18.50"],
-  ["High-Pressure 2\" Swivel Joint 1502", "Oilfield", 28, "850.00"],
-  ["Utility-Scale Solar Racking Rail (14ft Alum)", "Renewables", 340, "68.00"],
-  ["3/0 AWG Bare Copper Grounding Wire (ft)", "Electrical", 1500, "4.25"],
-  ["Grid-Scale BESS Battery Rack (250kWh Unit)", "Renewables", 6, "45000.00"],
-  ["Wind Turbine Lube Oil ISO VG 46 (55 Gal)", "Renewables", 32, "680.00"],
-  ["10,000 Gal Poly Water Storage Tank", "Oilfield", 12, "5400.00"],
+  // --------------------------------------------------------------------------
+  // 2. LUMBER & BUILDING MATERIALS
+  // --------------------------------------------------------------------------
+  {
+    item_name: "SYP #2 Structural Lumber 2x6x16",
+    category: "Lumber",
+    stock_level: 520,
+    unit_price_usd: 14.25,
+    unit_of_measure: "Board",
+    spec_grade: "Southern Yellow Pine #2 Prime",
+    hub_name: "Central Texas Lumber Yard",
+    city: "Conroe",
+    state: "TX",
+    zip_code: "77301",
+    lat: 30.3119,
+    lng: -95.4560,
+    weight_lbs_per_unit: 24.5,
+    length_ft: 16.0,
+    availability_type: "Immediate Yard Pick-up",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "3/4\" CDX Plywood Sheathing 4x8",
+    category: "Lumber",
+    stock_level: 310,
+    unit_price_usd: 29.50,
+    unit_of_measure: "Sheet",
+    spec_grade: "APA Rated CDX Pine",
+    hub_name: "Central Texas Lumber Yard",
+    city: "Conroe",
+    state: "TX",
+    zip_code: "77301",
+    lat: 30.3119,
+    lng: -95.4560,
+    weight_lbs_per_unit: 70.0,
+    length_ft: 8.0,
+    availability_type: "Immediate Yard Pick-up",
+    lead_time_hours: 0,
+    hazmat: false
+  },
 
-  // Data Center & Tech Corridor
-  ["4\" PVC Electrical Conduit Sch 40 (10ft)", "Electrical", 620, "18.90"],
-  ["Cat6A Shielded Plenum Cable (1000ft Spool)", "Telecom", 115, "285.00"],
-  ["Commercial Transformer Oil (55 Gal Drum)", "Electrical", 45, "420.00"],
-  ["100mm HDPE Utility Conduit Roll (1000ft)", "Electrical", 22, "1250.00"],
+  // --------------------------------------------------------------------------
+  // 3. CONCRETE, AGGREGATES & INFRASTRUCTURE
+  // --------------------------------------------------------------------------
+  {
+    item_name: "Crushed Texas Limestone (Base Grade 2)",
+    category: "Aggregates",
+    stock_level: 1200,
+    unit_price_usd: 22.00,
+    unit_of_measure: "Ton",
+    spec_grade: "TxDOT Item 247 Grade 2",
+    hub_name: "Central Texas Aggregate Quarry",
+    city: "New Braunfels",
+    state: "TX",
+    zip_code: "78130",
+    lat: 29.7030,
+    lng: -98.1245,
+    weight_lbs_per_unit: 2000.0,
+    length_ft: 0.0,
+    availability_type: "Bulk End-Dump Dispatch",
+    lead_time_hours: 2,
+    hazmat: false
+  },
+  {
+    item_name: "Type I/II Portland Cement (94lb Bags)",
+    category: "Cement",
+    stock_level: 310,
+    unit_price_usd: 16.50,
+    unit_of_measure: "Bag",
+    spec_grade: "ASTM C150 Type I/II",
+    hub_name: "DFW Industrial Steel Yard",
+    city: "Fort Worth",
+    state: "TX",
+    zip_code: "76102",
+    lat: 32.7555,
+    lng: -97.3308,
+    weight_lbs_per_unit: 94.0,
+    length_ft: 1.5,
+    availability_type: "Immediate Pallet Pick-up",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Ready-Mix Structural Concrete (4000 PSI / Yard)",
+    category: "Concrete",
+    stock_level: 450,
+    unit_price_usd: 145.00,
+    unit_of_measure: "Cubic Yard",
+    spec_grade: "TxDOT Class A 4000 PSI Mix",
+    hub_name: "Dallas Metro Ready-Mix Plant",
+    city: "Dallas",
+    state: "TX",
+    zip_code: "75212",
+    lat: 32.7767,
+    lng: -96.7970,
+    weight_lbs_per_unit: 4000.0,
+    length_ft: 0.0,
+    availability_type: "Batch Truck Dispatch",
+    lead_time_hours: 4,
+    hazmat: false
+  },
+  {
+    item_name: "High-Strength Precision Grout (50lb Bag)",
+    category: "Concrete",
+    stock_level: 280,
+    unit_price_usd: 24.50,
+    unit_of_measure: "Bag",
+    spec_grade: "ASTM C1107 Non-Shrink",
+    hub_name: "San Antonio Supply Hub",
+    city: "San Antonio",
+    state: "TX",
+    zip_code: "78219",
+    lat: 29.4241,
+    lng: -98.4936,
+    weight_lbs_per_unit: 50.0,
+    length_ft: 1.2,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "TxDOT Spec Pre-Stressed Concrete Beam (50ft)",
+    category: "Infrastructure",
+    stock_level: 18,
+    unit_price_usd: 4200.00,
+    unit_of_measure: "Beam Unit",
+    spec_grade: "TxDOT Type Tx28 Girder / 6000 PSI",
+    hub_name: "Central Texas Precast Plant",
+    city: "Victoria",
+    state: "TX",
+    zip_code: "77901",
+    lat: 28.8053,
+    lng: -96.9872,
+    weight_lbs_per_unit: 28500.0,
+    length_ft: 50.0,
+    availability_type: "Heavy Haul Oversize Permit Rig",
+    lead_time_hours: 24,
+    hazmat: false
+  },
 
-  // Agribusiness & Industrial Chemicals
-  ["Anhydrous Ammonia Fertilizer (Ton)", "Agriculture", 40, "620.00"]
+  // --------------------------------------------------------------------------
+  // 4. ENERGY, OILFIELD & ERCOT GRID
+  // --------------------------------------------------------------------------
+  {
+    item_name: "13-3/8\" API Spec Casing Pipe (OCTG)",
+    category: "Oilfield",
+    stock_level: 65,
+    unit_price_usd: 185.00,
+    unit_of_measure: "Linear Foot",
+    spec_grade: "API 5CT Grade J55 / BTC",
+    hub_name: "Permian Basin OCTG Pipe Yard",
+    city: "Odessa",
+    state: "TX",
+    zip_code: "79761",
+    lat: 31.8457,
+    lng: -102.3676,
+    weight_lbs_per_unit: 54.5,
+    length_ft: 40.0,
+    availability_type: "Immediate Oilfield Hotshot",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "API Drilling Mud / Bentonite (100lb Bag)",
+    category: "Oilfield",
+    stock_level: 900,
+    unit_price_usd: 18.50,
+    unit_of_measure: "Bag",
+    spec_grade: "API Spec 13A Section 9",
+    hub_name: "Permian Basin OCTG Pipe Yard",
+    city: "Odessa",
+    state: "TX",
+    zip_code: "79761",
+    lat: 31.8457,
+    lng: -102.3676,
+    weight_lbs_per_unit: 100.0,
+    length_ft: 2.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "High-Pressure 2\" Swivel Joint 1502",
+    category: "Oilfield",
+    stock_level: 28,
+    unit_price_usd: 850.00,
+    unit_of_measure: "Unit",
+    spec_grade: "15,000 PSI CWP / FMC Style",
+    hub_name: "Permian Basin OCTG Pipe Yard",
+    city: "Odessa",
+    state: "TX",
+    zip_code: "79761",
+    lat: 31.8457,
+    lng: -102.3676,
+    weight_lbs_per_unit: 32.0,
+    length_ft: 1.5,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Utility-Scale Solar Racking Rail (14ft Alum)",
+    category: "Renewables",
+    stock_level: 340,
+    unit_price_usd: 68.00,
+    unit_of_measure: "Rail Unit",
+    spec_grade: "6005-T5 Anodized Aluminum",
+    hub_name: "West Texas Solar Logistics Yard",
+    city: "Abilene",
+    state: "TX",
+    zip_code: "79601",
+    lat: 32.4487,
+    lng: -99.7331,
+    weight_lbs_per_unit: 18.2,
+    length_ft: 14.0,
+    availability_type: "Immediate Flatbed Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "3/0 AWG Bare Copper Grounding Wire (ft)",
+    category: "Electrical",
+    stock_level: 1500,
+    unit_price_usd: 4.25,
+    unit_of_measure: "Linear Foot",
+    spec_grade: "ASTM B8 Soft Drawn Copper",
+    hub_name: "Austin Tech Corridor Yard",
+    city: "Round Rock",
+    state: "TX",
+    zip_code: "78664",
+    lat: 30.5083,
+    lng: -97.6789,
+    weight_lbs_per_unit: 0.518,
+    length_ft: 1000.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Grid-Scale BESS Battery Rack (250kWh Unit)",
+    category: "Renewables",
+    stock_level: 6,
+    unit_price_usd: 45000.00,
+    unit_of_measure: "Rack System",
+    spec_grade: "LFP Chemistry / UL 1973 Certified",
+    hub_name: "Austin Tech Corridor Yard",
+    city: "Round Rock",
+    state: "TX",
+    zip_code: "78664",
+    lat: 30.5083,
+    lng: -97.6789,
+    weight_lbs_per_unit: 4800.0,
+    length_ft: 7.5,
+    availability_type: "Specialized Hazmat/Heavy Freight",
+    lead_time_hours: 12,
+    hazmat: true
+  },
+  {
+    item_name: "Wind Turbine Lube Oil ISO VG 46 (55 Gal)",
+    category: "Renewables",
+    stock_level: 32,
+    unit_price_usd: 680.00,
+    unit_of_measure: "55-Gal Drum",
+    spec_grade: "Synthetic PAO / ISO VG 46",
+    hub_name: "Panhandle Wind Corridor Depot",
+    city: "Amarillo",
+    state: "TX",
+    zip_code: "79101",
+    lat: 35.2220,
+    lng: -101.8313,
+    weight_lbs_per_unit: 440.0,
+    length_ft: 3.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "10,000 Gal Poly Water Storage Tank",
+    category: "Oilfield",
+    stock_level: 12,
+    unit_price_usd: 5400.00,
+    unit_of_measure: "Tank Unit",
+    spec_grade: "HDPE ASTM D1998 / 1.5 SPG",
+    hub_name: "Permian Basin OCTG Pipe Yard",
+    city: "Odessa",
+    state: "TX",
+    zip_code: "79761",
+    lat: 31.8457,
+    lng: -102.3676,
+    weight_lbs_per_unit: 2200.0,
+    length_ft: 14.0,
+    availability_type: "Oversize Flatbed Rig",
+    lead_time_hours: 6,
+    hazmat: false
+  },
+
+  // --------------------------------------------------------------------------
+  // 5. DATA CENTER & TECH CORRIDOR
+  // --------------------------------------------------------------------------
+  {
+    item_name: "4\" PVC Electrical Conduit Sch 40 (10ft)",
+    category: "Electrical",
+    stock_level: 620,
+    unit_price_usd: 18.90,
+    unit_of_measure: "10ft Length",
+    spec_grade: "NEMA TC-2 / UL 651",
+    hub_name: "Austin Tech Corridor Yard",
+    city: "Round Rock",
+    state: "TX",
+    zip_code: "78664",
+    lat: 30.5083,
+    lng: -97.6789,
+    weight_lbs_per_unit: 23.1,
+    length_ft: 10.0,
+    availability_type: "Immediate Yard Pick-up",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Cat6A Shielded Plenum Cable (1000ft Spool)",
+    category: "Telecom",
+    stock_level: 115,
+    unit_price_usd: 285.00,
+    unit_of_measure: "1000ft Spool",
+    spec_grade: "CMP Plenum Rated / 10Gbps TIA-568-C.2",
+    hub_name: "DFW Industrial Steel Yard",
+    city: "Fort Worth",
+    state: "TX",
+    zip_code: "76102",
+    lat: 32.7555,
+    lng: -97.3308,
+    weight_lbs_per_unit: 42.0,
+    length_ft: 1.5,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "Commercial Transformer Oil (55 Gal Drum)",
+    category: "Electrical",
+    stock_level: 45,
+    unit_price_usd: 420.00,
+    unit_of_measure: "55-Gal Drum",
+    spec_grade: "ASTM D3487 Type II Mineral Oil",
+    hub_name: "Houston Ship Channel Valve Hub",
+    city: "Pasadena",
+    state: "TX",
+    zip_code: "77506",
+    lat: 29.7052,
+    lng: -95.2091,
+    weight_lbs_per_unit: 435.0,
+    length_ft: 3.0,
+    availability_type: "Immediate Hotshot Dispatch",
+    lead_time_hours: 0,
+    hazmat: false
+  },
+  {
+    item_name: "100mm HDPE Utility Conduit Roll (1000ft)",
+    category: "Electrical",
+    stock_level: 22,
+    unit_price_usd: 1250.00,
+    unit_of_measure: "1000ft Continuous Roll",
+    spec_grade: "SDR 11 / ASTM F2160",
+    hub_name: "Austin Tech Corridor Yard",
+    city: "Round Rock",
+    state: "TX",
+    zip_code: "78664",
+    lat: 30.5083,
+    lng: -97.6789,
+    weight_lbs_per_unit: 680.0,
+    length_ft: 6.0, // Coil diameter
+    availability_type: "Flatbed Hotshot",
+    lead_time_hours: 2,
+    hazmat: false
+  },
+
+  // --------------------------------------------------------------------------
+  // 6. AGRIBUSINESS & INDUSTRIAL CHEMICALS
+  // --------------------------------------------------------------------------
+  {
+    item_name: "Anhydrous Ammonia Fertilizer (Ton)",
+    category: "Agriculture",
+    stock_level: 40,
+    unit_price_usd: 620.00,
+    unit_of_measure: "Ton",
+    spec_grade: "Commercial Grade 82-0-0 N",
+    hub_name: "Panhandle Agricultural Supply",
+    city: "Lubbock",
+    state: "TX",
+    zip_code: "79401",
+    lat: 33.5779,
+    lng: -101.8552,
+    weight_lbs_per_unit: 2000.0,
+    length_ft: 0.0,
+    availability_type: "Pressurized Tanker Transport",
+    lead_time_hours: 4,
+    hazmat: true
+  }
 ];
 
+// 2. Insert or Update Master Matrix
 const seedStmt = db.prepare(`
-  INSERT INTO industrial_inventory (item_name, category, stock_level, unit_price_usd)
-  VALUES (?, ?, ?, ?)
+  INSERT INTO industrial_inventory (
+    item_name, category, stock_level, unit_price_usd, unit_of_measure,
+    spec_grade, hub_name, city, state, zip_code, lat, lng,
+    weight_lbs_per_unit, length_ft, availability_type, lead_time_hours, hazmat
+  ) VALUES (
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  )
   ON CONFLICT(item_name) DO UPDATE SET
     stock_level = excluded.stock_level,
-    category = excluded.category
+    unit_price_usd = excluded.unit_price_usd,
+    category = excluded.category,
+    spec_grade = excluded.spec_grade,
+    hub_name = excluded.hub_name,
+    availability_type = excluded.availability_type,
+    updated_at = CURRENT_TIMESTAMP
 `);
 
-for (const item of seedInventory) {
-  seedStmt.run(item[0], item[1], item[2], item[3]);
+for (const item of seedInventoryMaster) {
+  seedStmt.run(
+    item.item_name, item.category, item.stock_level, item.unit_price_usd,
+    item.unit_of_measure, item.spec_grade, item.hub_name, item.city,
+    item.state, item.zip_code, item.lat, item.lng, item.weight_lbs_per_unit,
+    item.length_ft, item.availability_type, item.lead_time_hours, item.hazmat ? 1 : 0
+  );
 }
 
-// Seed Hotshot Freight Lanes (Expanded Corridors)
-const seedLanes = [
-  ["Dallas/Fort Worth -> Houston Corridor", "3.85"],
-  ["Midland/Odessa -> Houston (Permian Basin)", "4.20"],
-  ["San Antonio -> Laredo (Border Freight)", "3.65"],
-  ["Pecos/Orla -> Houston Port (Heavy Oilfield)", "4.60"],
-  ["El Paso -> Dallas/Fort Worth (Cross-State)", "3.40"],
-  ["Austin Tech Corridor -> DFW Data Center Hub", "3.95"],
-  ["Permian Oilfield Water Haul (Flat Rate / Load)", "320.00"]
-];
-
-const laneStmt = db.prepare(`
-  INSERT INTO hotshot_freight_lanes (lane_name, expedited_rate_per_mile)
-  VALUES (?, ?)
-  ON CONFLICT(lane_name) DO NOTHING
-`);
-
-for (const l of seedLanes) {
-  laneStmt.run(l[0], l[1]);
-}
-
-// Seed Fuel Rack Prices
-const seedFuel = [
-  ["DFW Terminal (Irving)", "3.45", "2.92"],
-  ["Houston Ship Channel", "3.35", "2.79"],
-  ["Permian Hub (Midland)", "3.68", "3.12"],
-  ["San Antonio Terminal", "3.40", "2.85"],
-  ["Corpus Christi Port Terminal", "3.38", "2.81"]
-];
-
-const fuelStmt = db.prepare(`
-  INSERT INTO fuel_prices (location, diesel_rack_usd, gas_unleaded_usd)
-  VALUES (?, ?, ?)
-  ON CONFLICT(location) DO NOTHING
-`);
-
-for (const f of seedFuel) {
-  fuelStmt.run(f[0], f[1], f[2]);
-}
-
-// 🔄 Background Oracle Cycle (Pulls EIA, FRED, & Scraped Data)
+// 🔄 Expanded Background Oracle Cycle
 async function runOracleCycle() {
   try {
     const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
     const items = await runOracleHarvest();
 
     for (const item of items) {
-      console.log(`  [ORACLE HARVESTED] ${item.name} -> ${item.value} ${item.unit} (${item.source})`);
-
+      // 1. Fuel Terminals (EIA)
       if (item.category === "Fuel" && item.value) {
         db.prepare(`
           UPDATE fuel_prices 
@@ -165,11 +592,30 @@ async function runOracleCycle() {
         `).run(item.value, timestamp);
       }
 
+      // 2. Metals & Steel (FRED)
       if (item.category === "Metals Index" && item.value) {
         db.prepare(`
           UPDATE industrial_inventory 
           SET unit_price_usd = ?, updated_at = ? 
-          WHERE item_name LIKE '%Structural Steel%' OR item_name LIKE '%Rebar%'
+          WHERE category IN ('Metals', 'Piping', 'Valves', 'Oilfield')
+        `).run(item.value, timestamp);
+      }
+
+      // 3. Lumber & Sheathing (FRED)
+      if (item.category === "Lumber Index" && item.value) {
+        db.prepare(`
+          UPDATE industrial_inventory 
+          SET unit_price_usd = ?, updated_at = ? 
+          WHERE category = 'Lumber'
+        `).run(item.value, timestamp);
+      }
+
+      // 4. Concrete & Aggregates (FRED)
+      if (item.category === "Concrete Index" && item.value) {
+        db.prepare(`
+          UPDATE industrial_inventory 
+          SET unit_price_usd = ?, updated_at = ? 
+          WHERE category IN ('Concrete', 'Cement', 'Aggregates')
         `).run(item.value, timestamp);
       }
     }
