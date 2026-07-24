@@ -23,6 +23,7 @@ app.use(express.static(path.join(process.cwd(), "public")));
 // 🗄️ Database Schema & Seeding (Expanded Matrix)
 // 1. Create or Upgrade Table Schema
 // 1. Initialize Tables Schema
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS industrial_inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +44,10 @@ db.exec(`
     availability_type TEXT,
     lead_time_hours INTEGER,
     hazmat BOOLEAN,
+    min_order_qty INTEGER DEFAULT 1,
+    min_ticket_usd REAL DEFAULT 50.00,
+    allows_hotshot BOOLEAN DEFAULT 1,
+    allows_customer_pickup BOOLEAN DEFAULT 1,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -578,9 +583,10 @@ const seedStmt = db.prepare(`
   INSERT INTO industrial_inventory (
     item_name, category, stock_level, unit_price_usd, unit_of_measure,
     spec_grade, hub_name, city, state, zip_code, lat, lng,
-    weight_lbs_per_unit, length_ft, availability_type, lead_time_hours, hazmat
+    weight_lbs_per_unit, length_ft, availability_type, lead_time_hours, hazmat,
+    min_order_qty, min_ticket_usd, allows_hotshot, allows_customer_pickup
   ) VALUES (
-    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
   )
   ON CONFLICT(item_name) DO UPDATE SET
     stock_level = excluded.stock_level,
@@ -593,11 +599,31 @@ const seedStmt = db.prepare(`
 `);
 
 for (const item of seedInventoryMaster) {
+  // Cast item to 'any' so TypeScript allows safe fallback checking
+  const row = item as any;
+
   seedStmt.run(
-    item.item_name, item.category, item.stock_level, item.unit_price_usd,
-    item.unit_of_measure, item.spec_grade, item.hub_name, item.city,
-    item.state, item.zip_code, item.lat, item.lng, item.weight_lbs_per_unit,
-    item.length_ft, item.availability_type, item.lead_time_hours, item.hazmat ? 1 : 0
+    row.item_name,
+    row.category,
+    row.stock_level,
+    row.unit_price_usd,
+    row.unit_of_measure,
+    row.spec_grade,
+    row.hub_name,
+    row.city,
+    row.state,
+    row.zip_code,
+    row.lat,
+    row.lng,
+    row.weight_lbs_per_unit,
+    row.length_ft,
+    row.availability_type,
+    row.lead_time_hours,
+    row.hazmat ? 1 : 0,
+    row.min_order_qty ?? 1,
+    row.min_ticket_usd ?? 50.0,
+    row.allows_hotshot ?? 1 ? 1 : 0,
+    row.allows_customer_pickup ?? 1 ? 1 : 0
   );
 }
 
