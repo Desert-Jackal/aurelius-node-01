@@ -22,6 +22,7 @@ app.use(express.static(path.join(process.cwd(), "public")));
 
 // 🗄️ Database Schema & Seeding (Expanded Matrix)
 // 1. Create or Upgrade Table Schema
+// 1. Initialize Tables Schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS industrial_inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +43,21 @@ db.exec(`
     availability_type TEXT,
     lead_time_hours INTEGER,
     hazmat BOOLEAN,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS hotshot_freight_lanes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lane_name TEXT UNIQUE,
+    expedited_rate_per_mile REAL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS fuel_prices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location TEXT UNIQUE,
+    diesel_rack_usd REAL,
+    gas_unleaded_usd REAL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
@@ -576,14 +592,55 @@ for (const item of seedInventoryMaster) {
   );
 }
 
-// 🔄 Expanded Background Oracle Cycle
+// Seed Hotshot Freight Lanes (Expanded Corridors)
+const seedLanes = [
+  ["Dallas/Fort Worth -> Houston Corridor", "3.85"],
+  ["Midland/Odessa -> Houston (Permian Basin)", "4.20"],
+  ["San Antonio -> Laredo (Border Freight)", "3.65"],
+  ["Pecos/Orla -> Houston Port (Heavy Oilfield)", "4.60"],
+  ["El Paso -> Dallas/Fort Worth (Cross-State)", "3.40"],
+  ["Austin Tech Corridor -> DFW Data Center Hub", "3.95"],
+  ["Permian Oilfield Water Haul (Flat Rate / Load)", "320.00"]
+];
+
+const laneStmt = db.prepare(`
+  INSERT INTO hotshot_freight_lanes (lane_name, expedited_rate_per_mile)
+  VALUES (?, ?)
+  ON CONFLICT(lane_name) DO NOTHING
+`);
+
+for (const l of seedLanes) {
+  laneStmt.run(l[0], l[1]);
+}
+
+// Seed Fuel Rack Prices
+const seedFuel = [
+  ["DFW Terminal (Irving)", "3.45", "2.92"],
+  ["Houston Ship Channel", "3.35", "2.79"],
+  ["Permian Hub (Midland)", "3.68", "3.12"],
+  ["San Antonio Terminal", "3.40", "2.85"],
+  ["Corpus Christi Port Terminal", "3.38", "2.81"]
+];
+
+const fuelStmt = db.prepare(`
+  INSERT INTO fuel_prices (location, diesel_rack_usd, gas_unleaded_usd)
+  VALUES (?, ?, ?)
+  ON CONFLICT(location) DO NOTHING
+`);
+
+for (const f of seedFuel) {
+  fuelStmt.run(f[0], f[1], f[2]);
+}
+
+// 🔄 Background Oracle Cycle (Pulls EIA, FRED, & Scraped Data)
 async function runOracleCycle() {
   try {
     const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
     const items = await runOracleHarvest();
 
     for (const item of items) {
-      // 1. Fuel Terminals (EIA)
+      console.log(`  [ORACLE HARVESTED] ${item.name} -> ${item.value} ${item.unit} (${item.source})`);
+
       if (item.category === "Fuel" && item.value) {
         db.prepare(`
           UPDATE fuel_prices 
@@ -592,30 +649,11 @@ async function runOracleCycle() {
         `).run(item.value, timestamp);
       }
 
-      // 2. Metals & Steel (FRED)
       if (item.category === "Metals Index" && item.value) {
         db.prepare(`
           UPDATE industrial_inventory 
           SET unit_price_usd = ?, updated_at = ? 
-          WHERE category IN ('Metals', 'Piping', 'Valves', 'Oilfield')
-        `).run(item.value, timestamp);
-      }
-
-      // 3. Lumber & Sheathing (FRED)
-      if (item.category === "Lumber Index" && item.value) {
-        db.prepare(`
-          UPDATE industrial_inventory 
-          SET unit_price_usd = ?, updated_at = ? 
-          WHERE category = 'Lumber'
-        `).run(item.value, timestamp);
-      }
-
-      // 4. Concrete & Aggregates (FRED)
-      if (item.category === "Concrete Index" && item.value) {
-        db.prepare(`
-          UPDATE industrial_inventory 
-          SET unit_price_usd = ?, updated_at = ? 
-          WHERE category IN ('Concrete', 'Cement', 'Aggregates')
+          WHERE item_name LIKE '%Structural Steel%' OR item_name LIKE '%Rebar%'
         `).run(item.value, timestamp);
       }
     }
