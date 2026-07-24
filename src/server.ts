@@ -60,6 +60,15 @@ db.exec(`
     gas_unleaded_usd REAL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS payment_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tx_hash TEXT,
+    sender TEXT,
+    amount_usdc REAL,
+    query_type TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // 🌾 Seed Ground-Truth Data (36-Item Texas Master Matrix)
